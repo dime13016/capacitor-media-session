@@ -230,7 +230,7 @@ public class MediaSessionService extends Service {
             int notificationActionIndex = 0;
             int compactNotificationActionIndicesIndex = 0;
             for (String actionName : possibleActions) {
-                if (plugin.hasActionHandler(actionName)) {
+                if (plugin != null && plugin.hasActionHandler(actionName)) {
                     if (actionName.equals("play") && playbackState != PlaybackStateCompat.STATE_PAUSED) {
                         continue;
                     }
