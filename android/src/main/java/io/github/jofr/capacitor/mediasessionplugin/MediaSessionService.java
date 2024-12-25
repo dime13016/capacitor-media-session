@@ -331,7 +331,7 @@ public class MediaSessionService extends Service {
                         activePlaybackStateActions = activePlaybackStateActions | playbackStateActions.get(actionName);
                     }
 
-                    if (notificationActions.containsKey(actionName)) {
+                    if (notificationActions.containsKey(actionName) && notificationBuilder != null) {
                         notificationBuilder.addAction(notificationActions.get(actionName));
                         if (possibleCompactViewActions.contains(actionName) && compactNotificationActionIndicesIndex < 3) {
                             activeCompactViewActionIndices[compactNotificationActionIndicesIndex] = notificationActionIndex;
@@ -377,9 +377,19 @@ public class MediaSessionService extends Service {
             mediaMetadataUpdate = false;
         }
 
-        if (notificationUpdate && notificationBuilder != null) {
-            notificationBuilder.setContentTitle(title).setContentText(artist + " - " + album).setLargeIcon(artwork);
-            notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+        if (notificationUpdate && notificationBuilder != null && notificationManager != null) {
+            try {
+                NotificationCompat.Builder builder = notificationBuilder
+                    .setContentTitle(title)
+                    .setContentText(artist + " - " + album)
+                    .setLargeIcon(artwork);
+
+                synchronized (notificationManager) {
+                    notificationManager.notify(NOTIFICATION_ID, builder.build());
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error updating notification", e);
+            }
             notificationUpdate = false;
         }
     }
