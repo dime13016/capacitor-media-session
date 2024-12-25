@@ -10,19 +10,15 @@ import android.os.IBinder;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Base64;
 import android.util.Log;
-
 import androidx.core.content.ContextCompat;
-
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.ProcessLifecycleOwner;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -30,9 +26,12 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 @CapacitorPlugin(name = "MediaSession")
 public class MediaSessionPlugin extends Plugin {
+
     private static final String TAG = "MediaSessionPlugin";
 
     private boolean startServiceOnlyDuringPlayback = true;
@@ -48,6 +47,8 @@ public class MediaSessionPlugin extends Plugin {
     private final Map<String, PluginCall> actionHandlers = new HashMap<>();
 
     private MediaSessionService service = null;
+
+    private static boolean isForegroundServiceStarted = false;
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
@@ -82,8 +83,15 @@ public class MediaSessionPlugin extends Plugin {
     }
 
     public void startMediaService() {
+        if (!isAppInForeground()) {
+            return;
+        }
+
         Intent intent = new Intent(getActivity(), MediaSessionService.class);
+
         ContextCompat.startForegroundService(getContext(), intent);
+        isForegroundServiceStarted = true;
+
         getContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
     }
 
@@ -94,7 +102,6 @@ public class MediaSessionPlugin extends Plugin {
         service.setArtwork(artwork);
         service.update();
     }
-
 
     private Bitmap urlToBitmap(String url) throws IOException {
         final boolean blobUrl = url.startsWith("blob:");
@@ -136,7 +143,9 @@ public class MediaSessionPlugin extends Plugin {
             }
         }
 
-        if (service != null) { updateServiceMetadata(); };
+        if (service != null) {
+            updateServiceMetadata();
+        }
         call.resolve();
     }
 
@@ -163,6 +172,7 @@ public class MediaSessionPlugin extends Plugin {
         } else if (startServiceOnlyDuringPlayback && service != null && !playback) {
             getContext().unbindService(serviceConnection);
             service = null;
+            isForegroundServiceStarted = false;
         } else if (service != null) {
             updateServicePlaybackState();
         }
@@ -183,7 +193,9 @@ public class MediaSessionPlugin extends Plugin {
         position = call.getDouble("position", 0.0);
         playbackRate = call.getFloat("playbackRate", 1.0F);
 
-        if (service != null) { updateServicePositionState(); };
+        if (service != null) {
+            updateServicePositionState();
+        }
         call.resolve();
     }
 
@@ -192,7 +204,9 @@ public class MediaSessionPlugin extends Plugin {
         call.setKeepAlive(true);
         actionHandlers.put(call.getString("action"), call);
 
-        if (service != null) { service.updatePossibleActions(); };
+        if (service != null) {
+            service.updatePossibleActions();
+        }
     }
 
     public boolean hasActionHandler(String action) {
@@ -211,5 +225,17 @@ public class MediaSessionPlugin extends Plugin {
         } else {
             Log.d(TAG, "No handler for action " + action);
         }
+    }
+
+    public static boolean isForegroundServiceStarted() {
+        return isForegroundServiceStarted;
+    }
+
+    public static void setForegroundServiceStarted(boolean foregroundServiceStarted) {
+        isForegroundServiceStarted = foregroundServiceStarted;
+    }
+
+    public static boolean isAppInForeground() {
+        return ProcessLifecycleOwner.get().getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED);
     }
 }

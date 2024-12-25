@@ -1,13 +1,10 @@
 package io.github.jofr.capacitor.mediasessionplugin;
 
 import android.annotation.SuppressLint;
-import android.app.ActivityManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.ComponentName;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
@@ -24,7 +21,6 @@ import androidx.media.session.MediaButtonReceiver;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -86,6 +82,7 @@ public class MediaSessionService extends Service {
 
     @Override
     public boolean onUnbind(Intent intent) {
+        this.notificationManager = null;
         this.destroy();
 
         return super.onUnbind(intent);
@@ -95,6 +92,7 @@ public class MediaSessionService extends Service {
         this.plugin = plugin;
 
         mediaSession = new MediaSessionCompat(this, "WebViewMediaSession");
+        mediaSession.setMediaButtonReceiver(null);
         mediaSession.setCallback(new MediaSessionCallback(plugin));
         mediaSession.setActive(true);
 
@@ -187,16 +185,17 @@ public class MediaSessionService extends Service {
     public void destroy() {
         stopForeground(true);
         stopSelf();
+        MediaSessionPlugin.setForegroundServiceStarted(false);
     }
 
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        if (notificationManager == null) {
-            notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                NotificationChannel channel = new NotificationChannel("playback", "Playback", NotificationManager.IMPORTANCE_LOW);
-                notificationManager.createNotificationChannel(channel);
-            }
+    public void onCreate() {
+        super.onCreate();
+
+        this.notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel("playback", "Playback", NotificationManager.IMPORTANCE_LOW);
+            this.notificationManager.createNotificationChannel(channel);
         }
 
         NotificationCompat.Builder initialNotification = new NotificationCompat.Builder(this, "playback")
@@ -205,45 +204,17 @@ public class MediaSessionService extends Service {
             .setContentText("Initializing...")
             .setPriority(NotificationCompat.PRIORITY_LOW);
 
-        if (this.isAppInForeground()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, initialNotification.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
-            } else {
-                startForeground(NOTIFICATION_ID, initialNotification.build());
-            }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, initialNotification.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         } else {
-            Log.w(TAG, "Unable to start foreground service: app is not in foreground");
+            startForeground(NOTIFICATION_ID, initialNotification.build());
         }
-
-        MediaButtonReceiver.handleIntent(mediaSession, intent);
-        return super.onStartCommand(intent, flags, startId);
     }
 
-    private boolean isAppInForeground() {
-        ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            List<ActivityManager.RunningAppProcessInfo> processes = activityManager.getRunningAppProcesses();
-            if (processes != null) {
-                for (ActivityManager.RunningAppProcessInfo processInfo : processes) {
-                    if (
-                        processInfo.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
-                        processInfo.processName.equals(getPackageName())
-                    ) {
-                        return true;
-                    }
-                }
-            }
-        } else {
-            List<ActivityManager.RunningTaskInfo> taskInfo = activityManager.getRunningTasks(1);
-            if (taskInfo != null && !taskInfo.isEmpty()) {
-                ComponentName topActivity = taskInfo.get(0).topActivity;
-                if (topActivity != null && topActivity.getPackageName().equals(getPackageName())) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        MediaButtonReceiver.handleIntent(mediaSession, intent);
+        return super.onStartCommand(intent, flags, startId);
     }
 
     public void setPlaybackState(int playbackState) {
@@ -307,7 +278,7 @@ public class MediaSessionService extends Service {
     }
 
     @SuppressLint("RestrictedApi")
-    public void update() {
+    public synchronized void update() {
         if (possibleActionsUpdate) {
             if (notificationBuilder != null) {
                 notificationBuilder.mActions.clear();
@@ -377,16 +348,14 @@ public class MediaSessionService extends Service {
             mediaMetadataUpdate = false;
         }
 
-        if (notificationUpdate && notificationBuilder != null && notificationManager != null) {
+        if (notificationUpdate && notificationBuilder != null && this.notificationManager != null) {
             try {
                 NotificationCompat.Builder builder = notificationBuilder
                     .setContentTitle(title)
                     .setContentText(artist + " - " + album)
                     .setLargeIcon(artwork);
 
-                synchronized (notificationManager) {
-                    notificationManager.notify(NOTIFICATION_ID, builder.build());
-                }
+                notificationManager.notify(NOTIFICATION_ID, builder.build());
             } catch (Exception e) {
                 Log.e(TAG, "Error updating notification", e);
             }

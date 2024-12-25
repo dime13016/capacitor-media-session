@@ -3,6 +3,7 @@ ext {
     androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.6.1'
     androidxJunitVersion = project.hasProperty('androidxJunitVersion') ? rootProject.ext.androidxJunitVersion : '1.1.5'
     androidxEspressoCoreVersion = project.hasProperty('androidxEspressoCoreVersion') ? rootProject.ext.androidxEspressoCoreVersion : '3.5.1'
+    androidxLifecycleVersion = project.hasProperty('androidxLifecycleVersion') ? rootProject.ext.androidxLifecycleVersion : '2.6.2'
 }
 
 buildscript {
@@ -52,6 +53,8 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+
+    implementation "androidx.lifecycle:lifecycle-process:$androidxLifecycleVersion"
 
     implementation "androidx.media:media:1.6.0"
     testImplementation "junit:junit:$junitVersion"
