@@ -105,6 +105,12 @@ public class MediaSessionService extends Service {
         mediaMetadataBuilder = new MediaMetadataCompat.Builder().putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration);
         mediaSession.setMetadata(mediaMetadataBuilder.build());
 
+        notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel("playback", "Playback", NotificationManager.IMPORTANCE_LOW);
+            notificationManager.createNotificationChannel(channel);
+        }
+
         notificationStyle = new MediaStyle().setMediaSession(mediaSession.getSessionToken());
         notificationBuilder =
             new NotificationCompat.Builder(this, "playback")
@@ -112,6 +118,12 @@ public class MediaSessionService extends Service {
                 .setSmallIcon(R.drawable.ic_baseline_volume_up_24)
                 .setContentIntent(PendingIntent.getActivity(getApplicationContext(), 0, intent, PendingIntent.FLAG_IMMUTABLE))
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notificationBuilder.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        } else {
+            startForeground(NOTIFICATION_ID, notificationBuilder.build());
+        }
 
         notificationActions.put(
             "play",
@@ -186,29 +198,6 @@ public class MediaSessionService extends Service {
         stopForeground(true);
         stopSelf();
         MediaSessionPlugin.setForegroundServiceStarted(false);
-    }
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-
-        this.notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel("playback", "Playback", NotificationManager.IMPORTANCE_LOW);
-            this.notificationManager.createNotificationChannel(channel);
-        }
-
-        NotificationCompat.Builder initialNotification = new NotificationCompat.Builder(this, "playback")
-            .setSmallIcon(R.drawable.ic_baseline_volume_up_24)
-            .setContentTitle("Media Player")
-            .setContentText("Initializing...")
-            .setPriority(NotificationCompat.PRIORITY_LOW);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, initialNotification.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
-        } else {
-            startForeground(NOTIFICATION_ID, initialNotification.build());
-        }
     }
 
     @Override
